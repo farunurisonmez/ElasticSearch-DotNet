@@ -11,15 +11,5 @@ namespace Elasticsearch.API.DTOs
         ProductFeatureDto? Feature
         )
     {
-        private string ıd;
-        private ProductFeatureDto productFeatureDto;
-
-        public ProductDto(string ıd, decimal price, int stock, ProductFeatureDto productFeatureDto)
-        {
-            this.ıd = ıd;
-            Price = price;
-            Stock = stock;
-            this.productFeatureDto = productFeatureDto;
-        }
     }
 }
