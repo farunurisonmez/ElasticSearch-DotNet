@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace Elasticsearch.API.Extensions
 {
-    public static class Elasticsearch
+    public static class ElasticsearchExt
     {
         public static void AddElastic(this IServiceCollection services, IConfiguration configuration)
         {
