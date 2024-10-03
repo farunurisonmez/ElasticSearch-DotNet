@@ -1,7 +1,3 @@
-İşte metninizin anlam bakımından düzeltilmiş hali:
-
----
-
 # Elastic Search with DotNet
 
 Bu proje, **ElasticSearch** kullanarak ürün bilgilerini (Product) saklayan ve dışarıya bir **API** sunan bir sistemdir. Kullanıcılar, bu API aracılığıyla ürün ekleyebilir, silebilir ya da güncelleyebilir. Proje, tek katmanlı bir mimariye sahiptir ve ElasticSearch ile Kibana'yı kolayca çalıştırmak için **Docker Compose** kullanır.
