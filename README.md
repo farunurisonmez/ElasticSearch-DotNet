@@ -77,7 +77,7 @@ Kibana'nın arayüzüne giriş yaptıktan sonra, **[eCommerce] Revenue** örnek 
 
 ## Proje Detayları
 
-Aşağıda sağladığınız kodlarla ilgili detaylı bir analiz ve açıklama yer almaktadır. Proje, Elasticsearch kullanarak ürün yönetim sistemini uygulayan bir API'yi içermektedir. Her bir dosya için ana işlevler ve yapılar hakkında bilgi verilecektir.
+Elasticsearch kullanarak ürün yönetim sistemini uygulayan bir API'yi içermektedir.
 
 ### 1. **Services/ProductService.cs**
 `ProductService` sınıfı, ürünlerle ilgili iş mantığını içerir. CRUD (Create, Read, Update, Delete) işlemleri için gerekli metotları sağlar.
