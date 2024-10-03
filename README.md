@@ -1,120 +1,189 @@
- Bu proje, **ElasticSearch** kullanarak ürün bilgilerini (Product) saklıyor ve dışarıya bir **API** sunuyor. Kullanıcılar bu API aracılığıyla ürün ekleyebiliyor, silebiliyor ya da güncelleyebiliyor.
-
-**ElasticSearch** burada bir veritabanı gibi çalışıyor, ama SQL veritabanları gibi tablolardan oluşan bir yapıda değil. Daha çok belgeler (documents) tutan bir arama motoru gibi düşünülebilir.
+İşte metninizin anlam bakımından düzeltilmiş hali:
 
 ---
 
-### Temel Kavramlar
+# Elastic Search with DotNet
 
-1. **Model (Product, ProductFeature)**: Gerçek dünyadaki ürünlerin bilgilerini (isim, fiyat, stok gibi) temsil eden sınıflar.
-2. **Repository**: Ürünlerin veritabanına (ElasticSearch) nasıl kaydedileceğini ya da geri alınacağını yöneten sınıf.
-3. **Service**: İş mantığını yönetir, yani ürünlerin nasıl kaydedileceğini, hangi koşullarda hatalar vereceğini gibi kuralları içerir.
-4. **Controller**: API'nin dış dünyayla konuştuğu yer. Dışarıdan gelen istekleri alır ve servisle iş birliği yaparak cevap verir.
+Bu proje, **ElasticSearch** kullanarak ürün bilgilerini (Product) saklayan ve dışarıya bir **API** sunan bir sistemdir. Kullanıcılar, bu API aracılığıyla ürün ekleyebilir, silebilir ya da güncelleyebilir. Proje, tek katmanlı bir mimariye sahiptir ve ElasticSearch ile Kibana'yı kolayca çalıştırmak için **Docker Compose** kullanır.
+
+## Proje Mimarisi
+
+Proje tek katmanlı bir yapıya sahiptir; yani iş mantığı, veri erişimi ve API katmanları tek bir katmanda yer almaktadır. 
+
+- **ElasticSearch**: Bir arama motoru olarak kullanılan ElasticSearch, projede veritabanı gibi çalışmaktadır. SQL veritabanları gibi tablolardan değil, belgelerden (documents) oluşan bir yapıdadır.
+- **Kibana**: ElasticSearch ile görsel analizler yapabilmek için kullanılan bir arayüzdür.
 
 ---
 
-### Adım Adım Anlayalım
+## Docker ile ElasticSearch ve Kibana Çalıştırma
 
-#### 1. **Product Modeli**
+Bu projede ElasticSearch ve Kibana'yı hızlı bir şekilde çalıştırmak için **Docker Compose** kullanıyoruz. Aşağıdaki `docker-compose.yml` dosyası ElasticSearch ve Kibana servislerini ayağa kaldırır:
 
-İlk olarak, bir ürünün neye benzediğini düşünelim. Bir ürün (Product), ismi olan, fiyatı ve stoğu olan bir nesne. Ayrıca bir de genişlik, yükseklik ve renk gibi ek özellikleri olabilir. Biz bu özellikleri **Product** ve **ProductFeature** modelleriyle tanımladık.
-
-```csharp
-public class Product
-{
-    public string Id { get; set; }  // Her ürünün benzersiz bir kimliği olacak
-    public string Name { get; set; } // Ürün adı
-    public decimal Price { get; set; } // Ürün fiyatı
-    public int Stock { get; set; }  // Ürünün stok durumu
-    public ProductFeature? Feature { get; set; } // Ek ürün özellikleri (Genişlik, yükseklik gibi)
-}
+```yaml
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    expose:
+      - 9200
+    environment:
+      - xpack.security.enabled=false
+      - "discovery.type=single-node"
+      - ELASTIC_USERNAME=elastic
+      - ELASTIC_PASSWORD=DkIedPPSCb
+    networks:
+      - es-net
+    ports:
+      - 9200:9200
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.7.1
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    expose:
+      - 5601
+    networks:
+      - es-net
+    depends_on:
+      - elasticsearch
+    ports:
+      - 5601:5601
+    volumes:
+      - kibana-data:/usr/share/kibana/data
+networks:
+  es-net:
+    driver: bridge
+volumes:
+  elasticsearch-data:
+    driver: local
+  kibana-data:
+    driver: local
 ```
 
-- **Product** sınıfı temel ürün bilgilerini tutuyor.
-- **ProductFeature** ise ürünün ek özelliklerini içeriyor (boyutlar, renk).
+### ElasticSearch ve Kibana'yı Başlatma
 
-#### 2. **DTO (Data Transfer Object)**
+Aşağıdaki komut ile ElasticSearch ve Kibana servislerini başlatabilirsiniz:
 
-DTO'lar, API'ye gelen ya da API'den çıkan veriyi daha basit hale getirmek için kullanılır. Örneğin, dışarıya bir ürün dönerken bu ürünü bir DTO ile döndürüyoruz.
-
-```csharp
-public record ProductDto(
-    string Id,
-    string Name,
-    decimal Price,
-    int Stock,
-    ProductFeatureDto? Feature
-);
+```bash
+docker-compose up -d
 ```
 
-- **ProductDto** sınıfı, dışarıya döneceğimiz ürün bilgisini temsil ediyor.
-- **ProductCreateDto** ise bir ürün oluşturulurken (POST isteğiyle) alınacak veriyi temsil ediyor.
+Bu komutu çalıştırdıktan sonra:
 
-#### 3. **Repository (Veritabanı ile İletişim)**
+- **ElasticSearch** `http://localhost:9200/` adresinde çalışıyor olacak.
+- **Kibana** ise `http://localhost:5601/` adresinden erişilebilir hale gelecektir.
 
-Şimdi, veritabanına (ElasticSearch'e) ürünleri nasıl kaydedeceğiz? İşte burada **ProductRepository** devreye giriyor. Bu sınıf, ElasticSearch ile iletişim kurarak ürün kaydetme, güncelleme ve silme işlemlerini yönetiyor.
+### Kibana ile E-Commerce Sample Data Entegrasyonu
 
-```csharp
-public class ProductRepository
-{
-    private readonly ElasticClient _client; // ElasticSearch ile iletişim kurmak için kullanılan nesne
+Kibana'nın arayüzüne giriş yaptıktan sonra, **[eCommerce] Revenue** örnek veri setini entegre edebilir ve bu veri seti üzerinden aramalar yaparak ElasticSearch'ün gücünü test edebilirsiniz.
 
-    public ProductRepository(ElasticClient client) {
-        _client = client;
-    }
+---
 
-    public async Task<Product?> SaveAsync(Product newProduct){
-        var response = await _client.IndexAsync(newProduct, x => x.Index("products"));
-        if(!response.IsValid) return null;
-        return newProduct;
-    }
-}
-```
+## Proje Detayları
 
-Bu sınıfın görevi:
-- **ElasticClient** ile ElasticSearch'e bağlanmak.
-- Ürünü veritabanına kaydetmek (Index işlemi).
+Aşağıda sağladığınız kodlarla ilgili detaylı bir analiz ve açıklama yer almaktadır. Proje, Elasticsearch kullanarak ürün yönetim sistemini uygulayan bir API'yi içermektedir. Her bir dosya için ana işlevler ve yapılar hakkında bilgi verilecektir.
 
-#### 4. **Service (İş Mantığı)**
+### 1. **Services/ProductService.cs**
+`ProductService` sınıfı, ürünlerle ilgili iş mantığını içerir. CRUD (Create, Read, Update, Delete) işlemleri için gerekli metotları sağlar.
 
-**Service** sınıfı işin kalbidir. Burada ürünlerin nasıl kaydedileceğini ve işlemlerin başarılı ya da başarısız olduğunda ne yapacağını tanımlıyoruz. Yani iş mantığımızı buraya yazıyoruz.
+- **Fieldlar:**
+  - `_productRepository`: Ürün veritabanı işlemlerini gerçekleştiren `ProductRepository` nesnesi.
+  - `_logger`: Loglama işlemleri için kullanılan logger.
 
-```csharp
-public class ProductService
-{
-    private readonly ProductRepository _productRepository;
+- **Constructor:** `ProductRepository` ve `ILogger` nesnelerini alarak başlatılır.
 
-    public ProductService(ProductRepository productRepository) { 
-        _productRepository = productRepository;
-    }
+- **Metotlar:**
+  - `SaveAsync(ProductCreateDto request)`: Yeni bir ürün kaydetmek için kullanılır. Eğer kayıt başarılı olursa, başarı durumu ile birlikte ürün bilgilerini döner, aksi takdirde hata mesajı ile döner.
+  
+  - `GetAllAsync()`: Tüm ürünleri getirir ve ürünlerin özelliklerini `ProductDto` formatında döner.
 
-    public async Task<ResponseDto<ProductDto>> SaveAsync(ProductCreateDto request) {
-        var responseProduct = await _productRepository.SaveAsync(request.CreateProduct());
-        if (responseProduct == null) {
-            return ResponseDto<ProductDto>.Fail(new List<string> { "Kayıt oluşturulamadı" }, HttpStatusCode.InternalServerError);
-        }
-        return ResponseDto<ProductDto>.Success(responseProduct.CreateDto(), HttpStatusCode.Created);
-    }
-}
-```
+  - `GetByIdAsync(string id)`: Belirtilen ID'ye sahip ürünü getirir. Eğer ürün yoksa, 404 hatası döner.
 
-Bu sınıfın görevi:
-- Gelen ürünü repository aracılığıyla veritabanına kaydetmek.
-- Eğer işlem başarısız olursa bir hata mesajı döndürmek.
-- İşlem başarılıysa DTO formatında ürünü döndürmek.
+  - `UpdateAsync(ProductUpdateDto updateProduct)`: Mevcut bir ürünü günceller. Güncelleme işlemi başarılı olursa 204 No Content döner, aksi takdirde hata mesajı ile döner.
 
-#### 5. **Controller (API'nin Dış Dünya ile Konuştuğu Yer)**
+  - `DeleteAsync(string id)`: Belirtilen ID'ye sahip ürünü siler. Silme işlemi başarısız olursa hata mesajı ile döner.
 
-Son adımda API'den gelecek istekleri alacak bir **Controller** oluşturuyoruz. Dış dünyadaki birisi API'ye bir ürün kaydetmek istediğinde, bu isteği karşılayıp **ProductService** aracılığıyla ürünü kaydediyoruz.
+### 2. **Repositories/ProductRepository.cs**
+`ProductRepository` sınıfı, Elasticsearch ile etkileşim kurarak ürün veritabanı işlemlerini gerçekleştiren bir katmandır.
 
-```csharp
-[HttpPost]
-public async Task<IActionResult> Save(ProductCreateDto request)
-{
-    return Ok(await _productService.SaveAsync(request));
-}
-```
+- **Fieldlar:**
+  - `_client`: Elasticsearch istemcisi.
+  - `indexName`: Ürünlerin saklandığı indeksin adı.
 
-- Dış dünyadan (örneğin, bir mobil uygulamadan) gelen POST isteğini karşılıyor.
-- Gelen ürün bilgisini servis aracılığıyla kaydediyor.
-- Sonuç olarak, başarılı bir şekilde kaydedilen ürünü geri döndürüyor.
+- **Metotlar:**
+  - `SaveAsync(Product newProduct)`: Yeni bir ürünü Elasticsearch'e kaydeder. Başarılıysa ürün nesnesini döner.
+
+  - `GetAllAsync()`: Tüm ürünleri getirir ve `ImmutableList<Product>` formatında döner.
+
+  - `GetByIdAsync(string id)`: Belirtilen ID'ye sahip ürünü getirir.
+
+  - `UpdateAsync(ProductUpdateDto updateProduct)`: Mevcut bir ürünü günceller.
+
+  - `DeleteAsync(string id)`: Belirtilen ID'ye sahip ürünü siler ve sonucu döner.
+
+### 3. **Models/EColor.cs**
+`EColor` enum'ı, ürün özelliklerinde kullanılacak renk seçeneklerini tanımlar. Kırmızı, yeşil ve mavi renkleri içerir.
+
+### 4. **Models/Product.cs**
+`Product` sınıfı, ürün verilerini tutar.
+
+- **Fieldlar:**
+  - `Id`, `Name`, `Price`, `Stock`, `Created`, `Updated`: Ürün bilgileri.
+  - `Feature`: Ürün özelliklerini temsil eden `ProductFeature` nesnesi.
+
+- **Metotlar:**
+  - `CreateDto()`: Ürün bilgilerini `ProductDto` formatında döner.
+
+### 5. **Models/ProductFeature.cs**
+`ProductFeature` sınıfı, ürünün fiziksel özelliklerini (genişlik, yükseklik, renk) tutar.
+
+### 6. **Extensions/Elasticsearch.cs**
+`ElasticsearchExt` sınıfı, Elasticsearch istemcisini uygulama servisine eklemek için bir genişletme metodu içerir.
+
+- **Metot:**
+  - `AddElastic()`: Elasticsearch ayarlarını alır ve uygulama hizmetlerine ekler.
+
+### 7. **DTOs/ProductCreateDto.cs**
+`ProductCreateDto` sınıfı, yeni bir ürün oluşturmak için gerekli verileri taşır.
+
+- **Metot:**
+  - `CreateProduct()`: DTO'dan bir `Product` nesnesi oluşturur.
+
+### 8. **DTOs/ProductDto.cs**
+`ProductDto` sınıfı, ürün verilerini istemciye göndermek için kullanılır.
+
+### 9. **DTOs/ProductFeatureDto.cs**
+`ProductFeatureDto` sınıfı, ürün özelliklerini istemciye göndermek için kullanılır.
+
+### 10. **DTOs/ProductUpdateDto.cs**
+`ProductUpdateDto` sınıfı, mevcut bir ürünü güncellemek için gerekli verileri taşır.
+
+### 11. **DTOs/ResponseDto.cs**
+`ResponseDto<T>` sınıfı, API yanıtlarını standart hale getirmek için kullanılır. Başarılı veya hata durumlarında döndürülecek verileri kapsar.
+
+- **Metotlar:**
+  - `Success()`: Başarılı bir yanıt döner.
+  - `Fail()`: Hata durumunda yanıt döner.
+
+### 12. **Controllers/BaseController.cs**
+`BaseController` sınıfı, diğer controller'lar için temel işlevsellik sağlar.
+
+- **Metot:**
+  - `CreateActionResult<T>()`: API yanıtını standart hale getirir.
+
+### 13. **Controller/ProductsController.cs**
+`ProductsController` sınıfı, ürünlerle ilgili API uç noktalarını yönetir.
+
+- **Metotlar:**
+  - `Save(ProductCreateDto request)`: Yeni bir ürün kaydetmek için kullanılır.
+  - `GetAll()`: Tüm ürünleri getirmek için kullanılır.
+  - `GetById(string id)`: Belirtilen ID'ye sahip ürünü getirmek için kullanılır.
+  - `Update(ProductUpdateDto request)`: Mevcut bir ürünü güncellemek için kullanılır.
+  - `Delete(string id)`: Belirtilen ID'ye sahip ürünü silmek için kullanılır.
+
+---
+
+### **Genel Kullanım Amaçları:**
+- **CRUD İşlemleri:** Uygulama, ürünleri eklemek, güncellemek, silmek ve listelemek için tam bir API sunmaktadır.
+- **Elasticsearch Entegrasyonu:** Veriler, hızlı arama ve veri işleme için Elasticsearch ile etkileşimli bir şekilde yönetilmektedir.
+
