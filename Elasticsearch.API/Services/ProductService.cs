@@ -1,4 +1,5 @@
-﻿using Elasticsearch.API.DTOs;
+﻿using Elastic.Clients.Elasticsearch;
+using Elasticsearch.API.DTOs;
 using Elasticsearch.API.Models;
 using Elasticsearch.API.Repositories;
 using System.Collections.Immutable;
@@ -9,9 +10,12 @@ namespace Elasticsearch.API.Services
     public class ProductService
     {
         private readonly ProductRepository _productRepository;
+        private readonly ILogger<ProductService> _logger;
 
-        public ProductService(ProductRepository productRepository) { 
+        public ProductService(ProductRepository productRepository, ILogger<ProductService> logger)
+        {
             _productRepository = productRepository;
+            _logger = logger;
         }
 
         public async Task<ResponseDto<ProductDto>> SaveAsync(ProductCreateDto request) {
@@ -54,17 +58,34 @@ namespace Elasticsearch.API.Services
 
         public async Task<ResponseDto<bool>> UpdateAsync(ProductUpdateDto updateProduct) { 
             var isSuccess = await _productRepository.UpdateAsync(updateProduct);
-            if (!isSuccess)
+            
+            
+            if (!isSuccess) {
                 return ResponseDto<bool>.Fail(new List<string> { "update esnasında bir hata oluştu" }, HttpStatusCode.InternalServerError);
+            }
             return ResponseDto<bool>.Success(true, HttpStatusCode.NoContent);
 
         }
 
         public async Task<ResponseDto<bool>> DeleteAsync(string id)
         {
-            var isSuccess = await _productRepository.DeleteAsync(id);
-            if (!isSuccess)
+            var deleteResponse = await _productRepository.DeleteAsync(id);
+
+            if (!deleteResponse.IsValidResponse && deleteResponse.Result == Result.NotFound)
+            {
                 return ResponseDto<bool>.Fail(new List<string> { "silme esnasında bir hata oluştu" }, HttpStatusCode.InternalServerError);
+
+            }
+
+            if (!deleteResponse.IsValidResponse) {
+
+                deleteResponse.TryGetOriginalException(out Exception? exception);
+
+                _logger.LogError(exception, deleteResponse.ElasticsearchServerError.Error.ToString());
+
+                return ResponseDto<bool>.Fail(new List<string> { "silme esnasında bir hata oluştu" }, HttpStatusCode.InternalServerError);
+
+            }
             return ResponseDto<bool>.Success(true, HttpStatusCode.NoContent);
         }
     }
